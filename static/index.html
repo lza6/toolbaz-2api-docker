@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toolbaz-2API 开发者驾驶舱</title>
+    <style>
+        :root { --bg: #121212; --panel: #1E1E1E; --text: #E0E0E0; --primary: #00FF9D; --border: #333; }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; display: flex; height: 100vh; }
+        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .main { flex: 1; padding: 20px; display: flex; flex-direction: column; }
+        .box { background: #252525; padding: 15px; border-radius: 6px; border: 1px solid var(--border); }
+        h2 { margin: 0 0 10px 0; color: var(--primary); font-size: 18px; }
+        label { display: block; font-size: 12px; color: #888; margin-bottom: 5px; }
+        input, select, textarea { width: 100%; background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px; font-family: inherit; }
+        button { width: 100%; padding: 10px; background: var(--primary); border: none; border-radius: 4px; color: #000; font-weight: bold; cursor: pointer; }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .chat-box { flex: 1; background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 15px; overflow-y: auto; margin-bottom: 15px; font-size: 14px; line-height: 1.6; }
+        .msg { margin-bottom: 10px; padding: 10px; border-radius: 4px; max-width: 80%; }
+        .msg.user { background: #333; align-self: flex-end; margin-left: auto; }
+        .msg.ai { background: #1a1a1a; border: 1px solid #333; }
+        .status { font-size: 12px; color: #888; margin-top: auto; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="box">
+            <h2>🚀 Toolbaz-2API</h2>
+            <div style="font-size: 12px; color: #aaa;">Docker 铁甲舰版 v2.1</div>
+        </div>
+        <div class="box">
+            <label>API Key</label>
+            <input type="password" id="apiKey" value="1">
+            <label>模型</label>
+            <select id="model">
+                <option value="toolbaz-v4.5-fast">toolbaz-v4.5-fast</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gpt-5">gpt-5</option>
+            </select>
+        </div>
+        <div class="status">
+            状态: <span style="color:var(--primary)">● 浏览器引擎就绪</span>
+        </div>
+    </div>
+    <div class="main">
+        <div class="chat-box" id="chatBox">
+            <div class="msg ai">系统已就绪。我是基于 Playwright 驱动的 Toolbaz 代理。请提问...</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <textarea id="prompt" rows="1" placeholder="输入消息..." style="margin:0;"></textarea>
+            <button style="width:100px; margin:0;" onclick="send()" id="btn">发送</button>
+        </div>
+    </div>
+
+    <script>
+        async function send() {
+            const prompt = document.getElementById('prompt').value;
+            if(!prompt) return;
+            
+            const chatBox = document.getElementById('chatBox');
+            const btn = document.getElementById('btn');
+            const apiKey = document.getElementById('apiKey').value;
+            const model = document.getElementById('model').value;
+
+            chatBox.innerHTML += `<div class="msg user">${prompt}</div>`;
+            document.getElementById('prompt').value = '';
+            btn.disabled = true;
+            btn.innerText = "生成中...";
+
+            const aiMsg = document.createElement('div');
+            aiMsg.className = 'msg ai';
+            aiMsg.innerText = "▋";
+            chatBox.appendChild(aiMsg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                const res = await fetch('/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{role: "user", content: prompt}],
+                        stream: true
+                    })
+                });
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = "";
+
+                while(true) {
+                    const {done, value} = await reader.read();
+                    if(done) break;
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    for(const line of lines) {
+                        if(line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if(data === '[DONE]') break;
+                            try {
+                                const json = JSON.parse(data);
+                                const content = json.choices[0].delta.content;
+                                if(content) {
+                                    fullText += content;
+                                    aiMsg.innerText = fullText + "▋";
+                                    chatBox.scrollTop = chatBox.scrollHeight;
+                                }
+                            } catch(e){}
+                        }
+                    }
+                }
+                aiMsg.innerText = fullText;
+            } catch(e) {
+                aiMsg.innerText += `\n[错误: ${e.message}]`;
+                aiMsg.style.color = "#ff5555";
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "发送";
+            }
+        }
+    </script>
+</body>
+</html>
