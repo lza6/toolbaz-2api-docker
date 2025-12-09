@@ -1,3 +1,8 @@
+# 懒人一键部署：
+```
+docker run -d --name toolbaz-api --restart always -p 8000:8000 2864460459/toolbaz-2api:latest
+```
+
 # 🚀 Toolbaz-2API Docker: 让旧时代的网页焕发 API 的新生
 
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
